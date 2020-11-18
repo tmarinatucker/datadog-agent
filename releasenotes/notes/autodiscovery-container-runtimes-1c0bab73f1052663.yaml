@@ -1,0 +1,4 @@
+---
+features:
+  - |
+    Agent learns to discover itself which container AD features and checks should be scheduled without having to specify any configuration. Works for Docker, Containerd, ECS/EKS Fargate, Kubernetes. As a side effect, it allows to support heteregenous nodes with a single configuration (for instance a Kubernetes DaemonSet could cover nodes running Containerd and/or Docker - activating relevant configuration depending on node configuration). This feature is activated by default and can be de-activated by setting `autoconf_from_environment: false`.
