@@ -137,8 +137,57 @@ func TestProbeMonitor(t *testing.T) {
 
 		time.Sleep(3 * time.Second)
 
-		if err := test.st.setLogLevel(seelog.TraceLvl); err != nil {
+		if err := test.st.resetLogLevel(); err != nil {
 			t.Error(err)
 		}
 	})
+}
+
+func TestNoisyProcess(t *testing.T) {
+	rule := &rules.RuleDefinition{
+		ID:         "path_test",
+		Expression: `open.filename =~ "*do-not-match/test-open" && open.flags & O_CREAT != 0`,
+	}
+
+	test, err := newTestModule(nil, []*rules.RuleDefinition{rule}, testOpts{disableDiscarders: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, filePtr, err := test.Path("test-open")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := test.st.setLogLevel(seelog.DebugLvl); err != nil {
+		t.Error(err)
+	}
+
+	t.Run("noisy_process", func(t *testing.T) {
+		go func() {
+			for i := int64(0); i < testMod.config.LoadControllerEventsCountThreshold*12/10; i++ {
+				fd, _, errno := syscall.Syscall(syscall.SYS_OPEN, uintptr(filePtr), syscall.O_CREAT, 0755)
+				if errno != 0 {
+					t.Fatal(error(errno))
+				}
+				_ = syscall.Close(int(fd))
+				_ = os.Remove(file)
+			}
+		}()
+
+		ruleEvent, err := test.GetProbeCustomEvent(3*time.Second, probe.NoisyProcessRuleID)
+		if err != nil {
+			t.Error(err)
+		} else {
+			if ruleEvent.RuleID != probe.NoisyProcessRuleID {
+				t.Errorf("expected %s rule, got %s", probe.NoisyProcessRuleID, ruleEvent.RuleID)
+			}
+		}
+
+		time.Sleep(3 * time.Second)
+	})
+
+	if err := test.st.resetLogLevel(); err != nil {
+		t.Error(err)
+	}
 }

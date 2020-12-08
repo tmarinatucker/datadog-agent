@@ -73,7 +73,7 @@ type Probe struct {
 	regexCache         *simplelru.LRU
 	approvers          map[eval.EventType]activeApprovers
 
-	monitor               *Monitor
+	monitor *Monitor
 }
 
 // GetResolvers returns the resolvers of Probe

@@ -142,7 +142,7 @@ func (h *testEventHandler) HandleEvent(event *sprobe.Event) {
 	case h.events <- &e:
 		break
 	default:
-		log.Debugf("dropped probe event %+v")
+		log.Tracef("dropped probe event %+v", event)
 	}
 	testMod.module.HandleEvent(event)
 }
@@ -157,7 +157,7 @@ func (h *testEventHandler) HandleCustomEvent(rule *eval.Rule, event *sprobe.Cust
 	case h.customEvents <- &re:
 		break
 	default:
-		log.Debugf("dropped probe custom event %+v")
+		log.Tracef("dropped probe custom event %+v")
 	}
 }
 
@@ -331,7 +331,7 @@ func (tm *testModule) EventDiscarderFound(rs *rules.RuleSet, event eval.Event, f
 	select {
 	case tm.discarders <- discarder:
 	default:
-		log.Warnf("Discarding discarder %+v", discarder)
+		log.Tracef("Discarding discarder %+v", discarder)
 	}
 }
 
@@ -484,6 +484,14 @@ func (t *simpleTest) setLogLevel(loglevel seelog.LogLevel) error {
 	return nil
 }
 
+func (t *simpleTest) resetLogLevel() error {
+	var logLevel seelog.LogLevel = seelog.InfoLvl
+	if testing.Verbose() {
+		logLevel = seelog.TraceLvl
+	}
+	return t.setLogLevel(logLevel)
+}
+
 func newSimpleTest(macros []*rules.MacroDefinition, rules []*rules.RuleDefinition, testDir string) (*simpleTest, error) {
 	var err error
 
@@ -491,11 +499,7 @@ func newSimpleTest(macros []*rules.MacroDefinition, rules []*rules.RuleDefinitio
 		root: testDir,
 	}
 
-	var logLevel seelog.LogLevel = seelog.InfoLvl
-	if testing.Verbose() {
-		logLevel = seelog.TraceLvl
-	}
-	if err := t.setLogLevel(logLevel); err != nil {
+	if err := t.resetLogLevel(); err != nil {
 		return nil, err
 	}
 
