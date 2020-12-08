@@ -735,6 +735,7 @@ func NewProbe(config *config.Config, client *statsd.Client) (*Probe, error) {
 		ctx:               ctx,
 		cancelFnc:         cancel,
 	}
+	p.detectKernelVersion()
 
 	p.detectKernelVersion()
 
@@ -752,6 +753,13 @@ func NewProbe(config *config.Config, client *statsd.Client) (*Probe, error) {
 		manager.ConstantEditor{
 			Name:  "do_fork_input",
 			Value: getDoForkInput(p),
+		},
+			Name:  "mount_id_offset",
+			Value: getMountIDOffset(p),
+		},
+		manager.ConstantEditor{
+			Name:  "sizeof_inode",
+			Value: getSizeOfStructInode(p),
 		},
 	)
 
