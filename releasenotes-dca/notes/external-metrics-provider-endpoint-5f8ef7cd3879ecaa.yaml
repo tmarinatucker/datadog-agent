@@ -1,0 +1,7 @@
+---
+enhancements:
+  - |
+    Add a new external_metrics_provider.endpoint config in datadog-cluster.yaml
+    and a DD_EXTERNAL_METRICS_PROVIDER_ENDPOINT environment variable to
+    override the default Datadog API endpoint to query external metrics from,
+    in place of the global DATADOG_HOST.
