@@ -46,6 +46,7 @@ type reOrdererList struct {
 }
 
 type reOrdererNode struct {
+	cpu       uint64
 	timestamp uint64
 	data      []byte
 	next      *reOrdererNode
@@ -100,11 +101,11 @@ type ReOrdererOpts struct {
 // ReOrderer defines an event re-orderer
 type ReOrderer struct {
 	queue            chan []byte
-	handler          func(data []byte)
+	handler          func(cpu uint64, data []byte)
 	list             *reOrdererList
 	pool             *reOrdererNodePool
 	resolveTimestamp func(t uint64) time.Time
-	timestampGetter  func(data []byte) (uint64, error)
+	extractInfo      func(data []byte) (uint64, uint64, error) // cpu, timestamp
 	opts             ReOrdererOpts
 }
 
@@ -116,7 +117,7 @@ func (r *ReOrderer) Start(ctx context.Context) {
 	dequeue := func(predicate func(node *reOrdererNode) bool) {
 		curr := r.list.head
 		for curr != nil && predicate(curr) {
-			r.handler(curr.data)
+			r.handler(curr.cpu, curr.data)
 			next := curr.next
 
 			r.pool.free(curr)
@@ -136,12 +137,13 @@ func (r *ReOrderer) Start(ctx context.Context) {
 	for {
 		select {
 		case data := <-r.queue:
-			tm, err := r.timestampGetter(data)
+			cpu, tm, err := r.extractInfo(data)
 			if err != nil {
 				continue
 			}
 
 			node := r.pool.alloc()
+			node.cpu = cpu
 			node.timestamp = tm
 			node.data = data
 
@@ -187,13 +189,13 @@ func (r *ReOrderer) HandleEvent(CPU int, data []byte, perfMap *manager.PerfMap, 
 }
 
 // NewReOrderer returns a new ReOrderer
-func NewReOrderer(handler func([]byte), tsg func(data []byte) (uint64, error), rts func(t uint64) time.Time, opts ReOrdererOpts) *ReOrderer {
+func NewReOrderer(handler func(uint64, []byte), extractInfo func(data []byte) (uint64, uint64, error), rts func(t uint64) time.Time, opts ReOrdererOpts) *ReOrderer {
 	return &ReOrderer{
 		queue:            make(chan []byte, opts.QueueSize),
 		handler:          handler,
 		list:             &reOrdererList{},
 		pool:             &reOrdererNodePool{},
-		timestampGetter:  tsg,
+		extractInfo:      extractInfo,
 		resolveTimestamp: rts,
 		opts:             opts,
 	}
