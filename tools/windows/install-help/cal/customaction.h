@@ -3,6 +3,8 @@
 #define MAX_PASS_LEN 18
 #include "SID.h"
 
+class CustomActionData;
+
 // usercreate.cpp
 bool generatePassword(wchar_t *passbuf, int passbuflen);
 int doCreateUser(const std::wstring &name, const std::wstring &comment, const wchar_t *passbuf);
