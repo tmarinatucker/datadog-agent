@@ -94,6 +94,9 @@ func (mr *MountResolver) SyncCache(pid uint32) error {
 		}
 
 		mr.insert(*e)
+
+		// init discarder revisions
+		mr.probe.initDiscarderRevision(e)
 	}
 
 	return nil
@@ -148,11 +151,28 @@ func (mr *MountResolver) Delete(mountID uint32) error {
 	return nil
 }
 
+// IsOverlayFS returns the type of a mountID
+func (mr *MountResolver) IsOverlayFS(mountID uint32) bool {
+	mr.lock.RLock()
+	defer mr.lock.RUnlock()
+
+	mount, exists := mr.mounts[mountID]
+	if !exists {
+		return false
+	}
+
+	return mount.IsOverlayFS()
+}
+
 // Insert a new mount point in the cache
 func (mr *MountResolver) Insert(e MountEvent) {
 	mr.lock.Lock()
 	defer mr.lock.Unlock()
+
 	mr.insert(e)
+
+	// init discarder revisions
+	mr.probe.initDiscarderRevision(&e)
 }
 
 func (mr *MountResolver) insert(e MountEvent) {
