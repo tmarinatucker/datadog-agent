@@ -10,6 +10,7 @@ package probe
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -139,6 +140,13 @@ func (p *Probe) Init() error {
 				LostHandler: p.handleLostEvents,
 			}
 		}
+	}
+
+	if os.Getenv("RUNTIME_SECURITY_TESTSUITE") != "true" {
+		p.managerOptions.ConstantEditors = append(p.managerOptions.ConstantEditors, manager.ConstantEditor{
+			Name:  "system_probe_pid",
+			Value: uint64(os.Getpid()),
+		})
 	}
 
 	if selectors, exists := probes.SelectorsPerEventType["*"]; exists {
