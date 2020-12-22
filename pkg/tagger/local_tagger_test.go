@@ -77,8 +77,8 @@ func TestInit(t *testing.T) {
 	}
 	assert.Equal(t, 3, len(catalog))
 
-	tagger := newTagger()
-	tagger.Init(catalog)
+	tagger := newLocalTagger(catalog)
+	tagger.Init()
 	defer tagger.Stop()
 
 	assert.Equal(t, 3, len(tagger.fetchers))
@@ -100,8 +100,8 @@ func TestInit(t *testing.T) {
 
 func TestFetchAllMiss(t *testing.T) {
 	catalog := collectors.Catalog{"stream": NewDummyStreamer, "pull": NewDummyPuller}
-	tagger := newTagger()
-	tagger.Init(catalog)
+	tagger := newLocalTagger(catalog)
+	tagger.Init()
 	defer tagger.Stop()
 
 	streamer := tagger.streamers["stream"].(*DummyCollector)
@@ -123,8 +123,8 @@ func TestFetchAllMiss(t *testing.T) {
 
 func TestFetchAllCached(t *testing.T) {
 	catalog := collectors.Catalog{"stream": NewDummyStreamer, "pull": NewDummyPuller}
-	tagger := newTagger()
-	tagger.Init(catalog)
+	tagger := newLocalTagger(catalog)
+	tagger.Init()
 	defer tagger.Stop()
 
 	tagger.tagStore.processTagInfo([]*collectors.TagInfo{
@@ -170,8 +170,8 @@ func TestFetchOneCached(t *testing.T) {
 		"pull":    NewDummyPuller,
 		"fetcher": NewDummyFetcher,
 	}
-	tagger := newTagger()
-	tagger.Init(catalog)
+	tagger := newLocalTagger(catalog)
+	tagger.Init()
 	defer tagger.Stop()
 
 	tagger.tagStore.processTagInfo([]*collectors.TagInfo{
@@ -207,8 +207,8 @@ func TestEmptyEntity(t *testing.T) {
 	catalog := collectors.Catalog{
 		"fetcher": NewDummyFetcher,
 	}
-	tagger := newTagger()
-	tagger.Init(catalog)
+	tagger := newLocalTagger(catalog)
+	tagger.Init()
 	defer tagger.Stop()
 
 	tagger.tagStore.processTagInfo([]*collectors.TagInfo{
@@ -237,8 +237,8 @@ func TestRetryCollector(t *testing.T) {
 	catalog := collectors.Catalog{
 		"fetcher": func() collectors.Collector { return c },
 	}
-	tagger := newTagger()
-	tagger.Init(catalog)
+	tagger := newLocalTagger(catalog)
+	tagger.Init()
 	defer tagger.Stop()
 
 	assert.Len(t, tagger.candidates, 1)
@@ -274,8 +274,8 @@ func TestErrNotFound(t *testing.T) {
 	catalog := collectors.Catalog{
 		"fetcher": func() collectors.Collector { return c },
 	}
-	tagger := newTagger()
-	tagger.Init(catalog)
+	tagger := newLocalTagger(catalog)
+	tagger.Init()
 	defer tagger.Stop()
 
 	// Result should not be cached
@@ -299,8 +299,8 @@ func TestErrNotFound(t *testing.T) {
 
 func TestSafeCache(t *testing.T) {
 	catalog := collectors.Catalog{"pull": NewDummyPuller}
-	tagger := newTagger()
-	tagger.Init(catalog)
+	tagger := newLocalTagger(catalog)
+	tagger.Init()
 	defer tagger.Stop()
 
 	tagger.tagStore.processTagInfo([]*collectors.TagInfo{

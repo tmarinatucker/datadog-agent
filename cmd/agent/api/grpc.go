@@ -31,11 +31,7 @@ type server struct {
 
 type serverSecure struct {
 	pb.UnimplementedAgentServer
-
-	// NOTE: tagger.Tagger is a concrete type that makes testing harder
-	// than it should be. We should make that concrete type private, and
-	// create a new tagger.Tagger interface that replicates it.
-	tagger *tagger.Tagger
+	tagger tagger.Tagger
 }
 
 func (s *server) GetHostname(ctx context.Context, in *pb.HostnameRequest) (*pb.HostnameReply, error) {

@@ -13,11 +13,12 @@ import (
 	"github.com/DataDog/datadog-agent/pkg/tagger/collectors"
 	"github.com/DataDog/datadog-agent/pkg/util/containers"
 	"github.com/DataDog/datadog-agent/pkg/util/containers/providers"
+	"github.com/DataDog/datadog-agent/pkg/util/flavor"
 	"github.com/DataDog/datadog-agent/pkg/util/log"
 )
 
 // defaultTagger is the shared tagger instance backing the global Tag and Init functions
-var defaultTagger *Tagger
+var defaultTagger Tagger
 var initOnce sync.Once
 
 // ChecksCardinality defines the cardinality of tags we should send for check metrics
@@ -46,7 +47,15 @@ func Init() {
 			DogstatsdCardinality = collectors.LowCardinality
 		}
 
-		defaultTagger.Init(collectors.DefaultCatalog)
+		if config.IsCLCRunner() {
+			log.Infof("Tagger not started on CLC")
+			return
+		}
+
+		err = defaultTagger.Init()
+		if err != nil {
+			log.Errorf("failed to start the tagger: %s", err)
+		}
 	})
 }
 
@@ -107,10 +116,14 @@ func List(cardinality collectors.TagCardinality) response.TaggerListResponse {
 }
 
 // GetDefaultTagger returns the global Tagger instance
-func GetDefaultTagger() *Tagger {
+func GetDefaultTagger() Tagger {
 	return defaultTagger
 }
 
 func init() {
-	defaultTagger = newTagger()
+	if flavor.GetFlavor() == flavor.DefaultAgent {
+		defaultTagger = newLocalTagger(collectors.DefaultCatalog)
+	} else {
+		defaultTagger = newRemoteTagger()
+	}
 }

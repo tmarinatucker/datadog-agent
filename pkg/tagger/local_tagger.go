@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DataDog/datadog-agent/pkg/config"
 	"github.com/DataDog/datadog-agent/pkg/util/log"
 
 	"github.com/DataDog/datadog-agent/cmd/agent/api/response"
@@ -21,10 +20,10 @@ import (
 	"github.com/DataDog/datadog-agent/pkg/util/retry"
 )
 
-// Tagger is the entry class for entity tagging. It holds collectors, memory store
+// localTagger is the entry class for entity tagging. It holds collectors, memory store
 // and handles the query logic. One can use the package methods to use the default
-// tagger instead of instantiating one.
-type Tagger struct {
+// localTagger instead of instantiating one.
+type localTagger struct {
 	sync.RWMutex
 	tagStore    *tagStore
 	candidates  map[string]collectors.CollectorFactory
@@ -45,12 +44,12 @@ type collectorReply struct {
 	instance collectors.Collector
 }
 
-// newTagger returns an allocated tagger. You still have to run Init()
+// newLocalTagger returns an allocated tagger. You still have to run Init()
 // once the config package is ready.
 // You are probably looking for tagger.Tag() using the global instance
 // instead of creating your own.
-func newTagger() *Tagger {
-	return &Tagger{
+func newLocalTagger(catalog collectors.Catalog) *localTagger {
+	t := &localTagger{
 		tagStore:    newTagStore(),
 		candidates:  make(map[string]collectors.CollectorFactory),
 		pullers:     make(map[string]collectors.Puller),
@@ -62,35 +61,31 @@ func newTagger() *Tagger {
 		retryTicker: time.NewTicker(30 * time.Second),
 		stop:        make(chan bool),
 	}
-}
-
-// Init goes through a catalog and tries to detect which are relevant
-// for this host. It then starts the collection logic and is ready for
-// requests.
-func (t *Tagger) Init(catalog collectors.Catalog) {
-	if config.IsCLCRunner() {
-		log.Infof("Tagger not started on CLC")
-		return
-	}
-
-	t.Lock()
-
-	// Only register the health check when the tagger is started
-	t.health = health.RegisterLiveness("tagger")
 
 	// Populate collector candidate list from catalog
 	// as we'll remove entries we need to copy the map
 	for name, factory := range catalog {
 		t.candidates[name] = factory
 	}
-	t.Unlock()
+
+	return t
+}
+
+// Init goes through a catalog and tries to detect which are relevant
+// for this host. It then starts the collection logic and is ready for
+// requests.
+func (t *localTagger) Init() error {
+	// Only register the health check when the tagger is started
+	t.health = health.RegisterLiveness("tagger")
 
 	t.startCollectors()
 	go t.run() //nolint:errcheck
 	go t.pull()
+
+	return nil
 }
 
-func (t *Tagger) run() error {
+func (t *localTagger) run() error {
 	for {
 		select {
 		case <-t.stop:
@@ -123,7 +118,7 @@ func (t *Tagger) run() error {
 // startCollectors iterates over the listener candidates and tries initializing them.
 // If the collector implements Retryer and return a FailWillRetry, we keep them in
 // the map and will retry at the next tick.
-func (t *Tagger) startCollectors() {
+func (t *localTagger) startCollectors() {
 	replies := t.tryCollectors()
 	if len(replies) > 0 {
 		t.registerCollectors(replies)
@@ -134,7 +129,7 @@ func (t *Tagger) startCollectors() {
 	}
 }
 
-func (t *Tagger) tryCollectors() []collectorReply {
+func (t *localTagger) tryCollectors() []collectorReply {
 	t.RLock()
 	if t.candidates == nil {
 		log.Warnf("called with empty candidate map, skipping")
@@ -165,7 +160,7 @@ func (t *Tagger) tryCollectors() []collectorReply {
 	return replies
 }
 
-func (t *Tagger) registerCollectors(replies []collectorReply) {
+func (t *localTagger) registerCollectors(replies []collectorReply) {
 	t.Lock()
 	for _, c := range replies {
 		// Whatever the outcome, don't try this collector again
@@ -201,7 +196,7 @@ func (t *Tagger) registerCollectors(replies []collectorReply) {
 	t.Unlock()
 }
 
-func (t *Tagger) pull() {
+func (t *localTagger) pull() {
 	t.RLock()
 	for _, puller := range t.pullers {
 		err := puller.Pull()
@@ -213,13 +208,13 @@ func (t *Tagger) pull() {
 }
 
 // Stop queues a shutdown of Tagger
-func (t *Tagger) Stop() error {
+func (t *localTagger) Stop() error {
 	t.stop <- true
 	return nil
 }
 
 // Tag returns tags for a given entity
-func (t *Tagger) Tag(entity string, cardinality collectors.TagCardinality) ([]string, error) {
+func (t *localTagger) Tag(entity string, cardinality collectors.TagCardinality) ([]string, error) {
 	queries.Inc(tagCardinalityToString(cardinality))
 
 	if entity == "" {
@@ -282,7 +277,7 @@ IterCollectors:
 
 // Standard returns standard tags for a given entity
 // It triggers a tagger fetch if the no tags are found
-func (t *Tagger) Standard(entity string) ([]string, error) {
+func (t *localTagger) Standard(entity string) ([]string, error) {
 	if entity == "" {
 		return nil, fmt.Errorf("empty entity ID")
 	}
@@ -296,7 +291,7 @@ func (t *Tagger) Standard(entity string) ([]string, error) {
 }
 
 // List the content of the tagger
-func (t *Tagger) List(cardinality collectors.TagCardinality) response.TaggerListResponse {
+func (t *localTagger) List(cardinality collectors.TagCardinality) response.TaggerListResponse {
 	r := response.TaggerListResponse{
 		Entities: make(map[string]response.TaggerListEntity),
 	}
@@ -317,12 +312,12 @@ func (t *Tagger) List(cardinality collectors.TagCardinality) response.TaggerList
 // Subscribe returns a list of existing entities in the store, alongside a
 // channel that receives events whenever an entity is added, modified or
 // deleted.
-func (t *Tagger) Subscribe(cardinality collectors.TagCardinality) chan []EntityEvent {
+func (t *localTagger) Subscribe(cardinality collectors.TagCardinality) chan []EntityEvent {
 	return t.tagStore.subscribe(cardinality)
 }
 
 // Unsubscribe ends a subscription to entity events and closes its channel.
-func (t *Tagger) Unsubscribe(ch chan []EntityEvent) {
+func (t *localTagger) Unsubscribe(ch chan []EntityEvent) {
 	t.tagStore.unsubscribe(ch)
 }
 
