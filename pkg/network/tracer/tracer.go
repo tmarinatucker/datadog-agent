@@ -28,7 +28,7 @@ import (
 
 var (
 	expvarEndpoints map[string]*expvar.Map
-	expvarTypes     = []string{"conntrack", "state", "tracer", "ebpf", "kprobes", "dns"}
+	expvarTypes     = []string{"conntrack", "state", "tracer", "ebpf", "kprobes", "dns", "http"}
 )
 
 func init() {
@@ -230,6 +230,7 @@ func NewTracer(config *config.Config) (*Tracer, error) {
 		config.MaxClosedConnectionsBuffered,
 		config.MaxConnectionsStateBuffered,
 		config.MaxDNSStatsBufferred,
+		config.MaxHTTPStatsBuffered,
 		config.CollectDNSDomains,
 	)
 
@@ -489,7 +490,7 @@ func (t *Tracer) GetActiveConnections(clientID string) (*network.Connections, er
 	t.flushIdle <- done
 	<-done
 
-	conns := t.state.Connections(clientID, latestTime, latestConns, t.reverseDNS.GetDNSStats())
+	conns := t.state.Connections(clientID, latestTime, latestConns, t.reverseDNS.GetDNSStats(), t.httpMonitor.GetHTTPStats())
 	names := t.reverseDNS.Resolve(conns)
 	tm := t.getConnTelemetry(len(latestConns))
 
@@ -757,6 +758,11 @@ func (t *Tracer) getTelemetry() (map[string]interface{}, error) {
 			stats["state"] = telemetry
 		}
 	}
+	if states, ok := stats["http"]; ok {
+		if telemetry, ok := states.(map[string]interface{})["telemetry"]; ok {
+			stats["http"] = telemetry
+		}
+	}
 	return stats, nil
 }
 
@@ -788,6 +794,7 @@ func (t *Tracer) GetStats() (map[string]interface{}, error) {
 		"ebpf":    t.getEbpfTelemetry(),
 		"kprobes": ddebpf.GetProbeStats(),
 		"dns":     t.reverseDNS.GetStats(),
+		"http":    t.httpMonitor.GetStats(),
 	}, nil
 }
 
@@ -881,7 +888,19 @@ func newHTTPMonitor(supported bool, c *config.Config, m *manager.Manager, h *dde
 		return nil
 	}
 
-	monitor, err := http.NewMonitor(c.ProcRoot, m, h)
+	filter, _ := m.GetProbe(manager.ProbeIdentificationPair{Section: string(probes.SocketHTTPFilter)})
+	if filter == nil {
+		log.Errorf("could not enable http monitoring: error retrieving socket filter")
+		return nil
+	}
+
+	closeFilterFn, err := network.HeadlessSocketFilter(c.ProcRoot, filter)
+	if err != nil {
+		log.Errorf("could not enable http monitoring: error enabling HTTP traffic inspection: %s", err)
+		return nil
+	}
+
+	monitor, err := http.NewMonitor(m, h, closeFilterFn)
 	if err != nil {
 		log.Errorf("could not enable http monitoring: %s", err)
 		return nil
