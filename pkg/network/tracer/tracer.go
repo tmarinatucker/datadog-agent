@@ -142,6 +142,11 @@ func NewTracer(config *config.Config) (*Tracer, error) {
 			string(probes.UdpPortBindingsMap): {Type: ebpf.Hash, MaxEntries: uint32(config.MaxTrackedConnections), EditorFlag: manager.EditMaxEntries},
 			string(probes.HttpInFlightMap):    {Type: ebpf.Hash, MaxEntries: uint32(config.MaxTrackedConnections), EditorFlag: manager.EditMaxEntries},
 		},
+		VerifierOptions: ebpf.CollectionOptions{
+			Programs: ebpf.ProgramOptions{
+				LogSize: (1024 * 1024),
+			},
+		},
 	}
 	mgrOptions.ConstantEditors, err = runOffsetGuessing(config, offsetBuf)
 	if err != nil {
