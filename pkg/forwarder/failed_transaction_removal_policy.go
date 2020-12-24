@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-agent/pkg/util"
+	"github.com/DataDog/datadog-agent/pkg/util/log"
 	"github.com/hashicorp/go-multierror"
 )
 
@@ -49,6 +50,7 @@ func (p *failedTransactionRemovalPolicy) registerDomain(domainName string) (stri
 	if err != nil {
 		return "", err
 	}
+	log.Debugf("Folder path for domain %s: %s", domainName, folder)
 
 	p.telemetry.addRegisteredDomainCount()
 	p.knownDomainFolders[folder] = struct{}{}
